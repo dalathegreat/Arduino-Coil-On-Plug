@@ -13,7 +13,7 @@ Engine compability:
 
 If you want to convert another type of Nissan engine, modify the number of pulses used for sync. Here is a great read which explains some of the different trigger discs found in various Nissans: http://datsun1200.com/modules/mediawiki/index.php?title=Nissan_Optical_CAS This application can easily be modified to work with the following Nissan engines:
 
-1. SR20 TESTED!
+1. SR20 TESTED! https://www.youtube.com/watch?v=OISRDuSyMRY 
 2. KA24
 3. CA18
 4. CG10/13
