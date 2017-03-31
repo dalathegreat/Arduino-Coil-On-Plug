@@ -26,7 +26,7 @@ volatile boolean state = LOW;         //State variable is used by CR interrupt t
 volatile byte pos = 0;                //Global position pulse counter [datarange 0-8]
 volatile boolean syncAchieved = 0;    //Set this to true if sync has been achieved [datarange 0-8] (Does this bit need to be volatile?)
 volatile byte cylinderCounter = 0;    //Sequence which cylinder should fire (0-1-2-3) [datarange 0-8]
-const byte fireOrder[] = {            //Table containing the fireorder (1-3-4-2)
+const byte fireOrder[4] = {            //Table containing the fireorder (1-3-4-2)
   B00000001,
   B00000100,
   B00001000,
