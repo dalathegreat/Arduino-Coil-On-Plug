@@ -1,24 +1,17 @@
-//       __________  ______      ____  _   __   ____  __    __  ________
-//      / ____/ __ \/  _/ /     / __ \/ | / /  / __ \/ /   / / / / ____/
-//     / /   / / / // // /     / / / /  |/ /  / /_/ / /   / / / / / __  
-//    / /___/ /_/ // // /___  / /_/ / /|  /  / ____/ /___/ /_/ / /_/ /  
-//    \____/\____/___/_____/  \____/_/ |_/  /_/   /_____/\____/\____/   
+/**********************************************************************
+       __________  ______      ____  _   __   ____  __    __  ________
+      / ____/ __ \/  _/ /     / __ \/ | / /  / __ \/ /   / / / / ____/
+     / /   / / / // // /     / / / /  |/ /  / /_/ / /   / / / / / __  
+    / /___/ /_/ // // /___  / /_/ / /|  /  / ____/ /___/ /_/ / /_/ /  
+    \____/\____/___/_____/  \____/_/ |_/  /_/   /_____/\____/\____/   
 
-//COIL ON PLUG ARDUINO UNO Beta v1.3 (29.3.2017) Daniel Öster
-//This application samples in two distributor signals, (CR & CP), Camshaft Reference & Camshaft Position
-//It then syncs the firing sequence to Cylinder 1, and ignores CP information from there on.
-//It then outputs 4 digital outs depending on which cylinder should fire. 
+COIL ON PLUG ARDUINO UNO Beta v1.4 (31.3.2017) Daniel Öster
+This application samples in two distributor signals, (CR & CP), Camshaft Reference & Camshaft Position
+It then syncs the firing sequence to Cylinder 1, and ignores CP information from there on.
+It then outputs 4 digital outs depending on which cylinder should fire. 
 
-//Changelog v1.3 , Main improvement: ISR1 Interrupt speedup
-//-Instead of using two if's in main ISR1, switched to if-else to speed up processing
-//-Instead of using two if's to check state before sync, switched to if-else to speed up processing
-//-Defined fireOrder table as byte instead of int to save memory (thanks John!)
-//-Removed PORTB writing in setup, not needed according to documentation. Should speedup setup.
-
-//Still todo: 
-//-Combat RFI to make wasted spark work. Maybe add a slower check in interrupt? Or add better hardware filtering.
-//-Add smart wasted spark activation on only low rpm (add rpm measurement?) Big task!
-//-If startup speed is important, bootloader can be deleted from Arduino. This has the negative aspect of needing programming via ISCP header with an AVRisp programmer. Measurements are needed before decision can be made.
+Changelog v1.4 , Added RPM measurement
+***********************************************************************/
 
 const byte CamshaftPositionPin = 3;   //Interrupt pin for camshaft position (pin3) [datarange 0-8]
 const byte CamshaftReferencePin = 2;  //Interrupt pin for camshaft reference (pin2) [datarange 0-8]
@@ -26,7 +19,10 @@ volatile boolean state = LOW;         //State variable is used by CR interrupt t
 volatile byte pos = 0;                //Global position pulse counter [datarange 0-8]
 volatile boolean syncAchieved = 0;    //Set this to true if sync has been achieved [datarange 0-8] (Does this bit need to be volatile?)
 volatile byte cylinderCounter = 0;    //Sequence which cylinder should fire (0-1-2-3) [datarange 0-8]
-const byte fireOrder[4] = {            //Table containing the fireorder (1-3-4-2)
+volatile int halfEngineRev = 0;		  //Variable used for calculating rpm
+unsigned long timeold = 0;			  //Variable used for calculating rpm
+volatile int rpm = 0;	  			  //Variable used for storing actual rpm
+const byte fireOrder[4] = {           //Table containing the fireorder (1-3-4-2 sequential) , (14 & 23 wasted)
   B00000001,
   B00000100,
   B00001000,
@@ -46,7 +42,22 @@ void setup() { //Define setup variables and pin confiurations
 
 void loop() { //Program main loop
   while(syncAchieved == 1){//Start sequencing ignition outputs when sync has occured. Otherwise just wait until engine starts rotating.
-    PORTB = fireOrder[cylinderCounter];}
+    PORTB = fireOrder[cylinderCounter];
+    
+	if (halfEngineRev >= 20) { //measure rpm and disable/enable wasted spark
+     	//Update RPM every 20 counts, increase this for better RPM resolution,
+     	//decrease for faster update
+     	rpm = 30*1000/(millis() - timeold)*halfEngineRev; //Still todo-tweak this to get correct engine RPM reading
+     	timeold = millis(); //note that millis will overflow after 50days of running engine nonstop, not a real issue :)
+     	halfEngineRev = 0;
+     	if (rpm > 3000){  //set this to the desired above rpm that you want to switch to fully sequential ignition
+    		const byte fireOrder[4] = {B00000001,B00000100,B00001000,B00000010}; //Sequential ignition
+		}
+		else{
+			const byte fireOrder[4] = {B00001001,B00000110,B00001001,B00000110}; //Wasted spark igntion
+   }
+  }
+ }
 }
 
 void ISR0() //Keep constant track of RISING position pin
@@ -58,6 +69,7 @@ void ISR1() { //Keep constant track of CHANGE/(RISING after sync) state for refe
   if (syncAchieved == 1) { //If we have achieved sync, do only this part of the interrupt
     if(digitalRead(CamshaftReferencePin) == HIGH){ //This is an "unneeded if". It filters out spark EMI, incorrect pulses will be counted otherwise.
       cylinderCounter++; //we sequence the next cylinder that should fire
+  	  halfEngineRev++; //we also increase variable indicating that the engine has performed one half rotation
       if (cylinderCounter > 3){cylinderCounter = 0;} //This a reset for the cylinder firing sequencer. We have 4 cylinders, so we reset after we reached the final one.
     }
   }
