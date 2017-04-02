@@ -4,24 +4,17 @@
 //    / /___/ /_/ // // /___  / /_/ / /|  /  / ____/ /___/ /_/ / /_/ /  
 //    \____/\____/___/_____/  \____/_/ |_/  /_/   /_____/\____/\____/   
 
-//COIL ON PLUG ARDUINO UNO Beta v1.3 (29.3.2017) Daniel Öster
+//COIL ON PLUG ARDUINO UNO Proto v0.01 (based on v1.3) (2.4.2017) Daniel Öster
 //This application samples in two distributor signals, (CR & CP), Camshaft Reference & Camshaft Position
 //It then syncs the firing sequence to Cylinder 1, and ignores CP information from there on.
 //It then outputs 4 digital outs depending on which cylinder should fire. 
 
-//Changelog v1.3 , Main improvement: ISR1 Interrupt speedup
-//-Instead of using two if's in main ISR1, switched to if-else to speed up processing
-//-Instead of using two if's to check state before sync, switched to if-else to speed up processing
-//-Defined fireOrder table as byte instead of int to save memory (thanks John!)
-//-Removed PORTB writing in setup, not needed according to documentation. Should speedup setup.
-
-//Still todo: 
-//-Combat RFI to make wasted spark work. Maybe add a slower check in interrupt? Or add better hardware filtering.
-//-Add smart wasted spark activation on only low rpm (add rpm measurement?) Big task!
-//-If startup speed is important, bootloader can be deleted from Arduino. This has the negative aspect of needing programming via ISCP header with an AVRisp programmer. Measurements are needed before decision can be made.
+//Changelog v0.01 , 
+//It also inputs ignition signal and disables the sequencing while a sparkplug fires. Needs testing on engine
 
 const byte CamshaftPositionPin = 3;   //Interrupt pin for camshaft position (pin3) [datarange 0-8]
 const byte CamshaftReferencePin = 2;  //Interrupt pin for camshaft reference (pin2) [datarange 0-8]
+const byte IgnitionPin = 28;          //Interrupt pin for ignition (pin28) [datarange 0-8]
 volatile boolean state = LOW;         //State variable is used by CR interrupt to perform different tasks depending on signal state [datarange 0-1]
 volatile byte pos = 0;                //Global position pulse counter [datarange 0-8]
 volatile boolean syncAchieved = 0;    //Set this to true if sync has been achieved [datarange 0-8] (Does this bit need to be volatile?)
@@ -77,8 +70,25 @@ void ISR1() { //Keep constant track of CHANGE/(RISING after sync) state for refe
       {
          detachInterrupt(digitalPinToInterrupt(CamshaftPositionPin)); //If sync is achieved, we immedeatly disable keeping track of the position pin permanently
          syncAchieved = 1; //Set variable used to start ignition and disable unnecessary measuring of position pin
+
+           //Ignition sampling settings, start capturing ignition events
+            PCICR |= 0b00000010;     //Turn on port C pin change interrupts, used for Ignition sampling
+            PCMSK1 |= 0b00100000;    //Turn on pin PC5, which is PCINT11, physical pin 28
+
          attachInterrupt(digitalPinToInterrupt(CamshaftReferencePin), ISR1, RISING); //We no longer keep track of change state once synced. Now we locate rising change on the ref pin.
       } 
       pos = 0; //Reset after each count. This is an important reset before large window has been found (moved up)
   }   
+}
+
+ISR(PCINT1_vect){ // Port C, PCINT8 - PCINT14, Interrupt for Ignition High on A5 (pin 28)
+  if(digitalRead(IgnitionPin) == HIGH)
+  {
+    detachInterrupt(digitalPinToInterrupt(CamshaftReferencePin));
+  }
+else 
+  {  
+   attachInterrupt(digitalPinToInterrupt(CamshaftReferencePin), ISR1, RISING); 
+  }
+  
 }
