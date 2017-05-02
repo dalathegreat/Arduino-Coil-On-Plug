@@ -1,25 +1,27 @@
-//       __________  ______      ____  _   __   ____  __    __  ________
-//      / ____/ __ \/  _/ /     / __ \/ | / /  / __ \/ /   / / / / ____/
-//     / /   / / / // // /     / / / /  |/ /  / /_/ / /   / / / / / __  
-//    / /___/ /_/ // // /___  / /_/ / /|  /  / ____/ /___/ /_/ / /_/ /  
-//    \____/\____/___/_____/  \____/_/ |_/  /_/   /_____/\____/\____/   
+/**********************************************************************
+       __________  ______      ____  _   __   ____  __    __  ________
+      / ____/ __ \/  _/ /     / __ \/ | / /  / __ \/ /   / / / / ____/
+     / /   / / / // // /     / / / /  |/ /  / /_/ / /   / / / / / __  
+    / /___/ /_/ // // /___  / /_/ / /|  /  / ____/ /___/ /_/ / /_/ /  
+    \____/\____/___/_____/  \____/_/ |_/  /_/   /_____/\____/\____/   
+    
+COIL ON PLUG ARDUINO UNO Beta v1.4 (2.5.2017) Daniel Öster
+This application samples in two distributor signals, (CR & CP), Camshaft Reference & Camshaft Position
+It then syncs the firing sequence to Cylinder 1, and ignores CP information from there on.
+It then outputs 4 digital outs depending on which cylinder should fire.
+It also inputs ignition signal and disables the sequencing while a sparkplug fires and creates interference
 
-//COIL ON PLUG ARDUINO UNO Proto v0.01 (based on v1.3) (2.4.2017) Daniel Öster
-//This application samples in two distributor signals, (CR & CP), Camshaft Reference & Camshaft Position
-//It then syncs the firing sequence to Cylinder 1, and ignores CP information from there on.
-//It then outputs 4 digital outs depending on which cylinder should fire. 
+Changelog v1.4 , Added ignition input to disable interrupts while spark fires
+***********************************************************************/
 
-//Changelog v0.01 , 
-//It also inputs ignition signal and disables the sequencing while a sparkplug fires. Needs testing on engine
-
-const byte CamshaftPositionPin = 3;   //Interrupt pin for camshaft position (pin3) [datarange 0-8]
-const byte CamshaftReferencePin = 2;  //Interrupt pin for camshaft reference (pin2) [datarange 0-8]
-const byte IgnitionPin = 28;          //Interrupt pin for ignition (pin28) [datarange 0-8]
+const byte CamshaftPositionPin = 3;   //Interrupt pin for camshaft position (pin3) [datarange 0-255]
+const byte CamshaftReferencePin = 2;  //Interrupt pin for camshaft reference (pin2) [datarange 0-255]
+const byte IgnitionPin = 28;          //Interrupt pin for ignition (pin28) [datarange 0-255]
 volatile boolean state = LOW;         //State variable is used by CR interrupt to perform different tasks depending on signal state [datarange 0-1]
-volatile byte pos = 0;                //Global position pulse counter [datarange 0-8]
-volatile boolean syncAchieved = 0;    //Set this to true if sync has been achieved [datarange 0-8] (Does this bit need to be volatile?)
-volatile byte cylinderCounter = 0;    //Sequence which cylinder should fire (0-1-2-3) [datarange 0-8]
-const byte fireOrder[] = {            //Table containing the fireorder (1-3-4-2)
+volatile byte pos = 0;                //Global position pulse counter [datarange 0-255]
+volatile boolean syncAchieved = 0;    //Set this to true if sync has been achieved [datarange 0-255] (Does this bit need to be volatile?)
+volatile byte cylinderCounter = 0;    //Sequence which cylinder should fire (0-1-2-3) [datarange 0-255]
+const byte fireOrder[] = {            //Table containing the fireorder (1-3-4-2) [datarange 0-255]
   B00000001,
   B00000100,
   B00001000,
@@ -82,13 +84,13 @@ void ISR1() { //Keep constant track of CHANGE/(RISING after sync) state for refe
 }
 
 ISR(PCINT1_vect){ // Port C, PCINT8 - PCINT14, Interrupt for Ignition High on A5 (pin 28)
-  if(digitalRead(IgnitionPin) == HIGH)
+  if(digitalRead(IgnitionPin) == HIGH) //Filtering, determine if pin is high. 
   {
-    detachInterrupt(digitalPinToInterrupt(CamshaftReferencePin));
+    detachInterrupt(digitalPinToInterrupt(CamshaftReferencePin)); //If pin is high, disable sequencing
   }
 else 
   {  
-   attachInterrupt(digitalPinToInterrupt(CamshaftReferencePin), ISR1, RISING); 
+   attachInterrupt(digitalPinToInterrupt(CamshaftReferencePin), ISR1, RISING); //Otherwise enable sequencing. This can even be called unnecessarily without issues.
   }
   
 }
