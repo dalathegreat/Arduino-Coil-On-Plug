@@ -4,22 +4,27 @@
      / /   / / / // // /     / / / /  |/ /  / /_/ / /   / / / / / __  
     / /___/ /_/ // // /___  / /_/ / /|  /  / ____/ /___/ /_/ / /_/ /  
     \____/\____/___/_____/  \____/_/ |_/  /_/   /_____/\____/\____/   
-COIL ON PLUG ARDUINO UNO Beta v1.4 (31.3.2017) Daniel Öster
+
+COIL ON PLUG ARDUINO UNO Beta v1.5? (2.5.2017) Daniel Öster
 This application samples in two distributor signals, (CR & CP), Camshaft Reference & Camshaft Position
 It then syncs the firing sequence to Cylinder 1, and ignores CP information from there on.
-It then outputs 4 digital outs depending on which cylinder should fire. 
+It then outputs 4 digital outs depending on which cylinder should fire.
+It also inputs ignition signal and disables the sequencing while a sparkplug fires and creates interference
+It now also measures rpm and switches wasted operation on/off depending on current rpm
 
-Changelog v1.4 , Added RPM measurement, switches at 3000rpm
+Changelog v1.5? , Added rpm measurement, switches at 3000rpm
+CAUTION: NOT TESTED ON ENGINE!!!!!
 ***********************************************************************/
 
 const byte CamshaftPositionPin = 3;   //Interrupt pin for camshaft position (pin3) [datarange 0-255]
 const byte CamshaftReferencePin = 2;  //Interrupt pin for camshaft reference (pin2) [datarange 0-255]
+const byte IgnitionPin = 28;          //Interrupt pin for ignition (pin28) [datarange 0-255]
 volatile boolean state = LOW;         //State variable is used by CR interrupt to perform different tasks depending on signal state [datarange 0-1]
 volatile byte pos = 0;                //Global position pulse counter [datarange 0-255]
 volatile boolean syncAchieved = 1;    //Set this to true if sync has been achieved [datarange 0-255] (Does this bit need to be volatile?)
 volatile byte cylinderCounter = 0;    //Sequence which cylinder should fire (0-1-2-3) [datarange 0-255]
 volatile byte halfEngineRev = 0;      //Variable used for calculating rpm [datarange 0-255]
-unsigned long timeold = 0;            //Variable used for calculating rpm, storing time [datarange 0-4,294,967,295]
+unsigned long timeold = 0;            //Variable used for calculating rpm, storing time [datarange 0-4294967295]
 volatile word rpm = 0;                //Variable used for storing actual rpm [datarange 0-65535]
 volatile byte fireOrder[4] = {B00000001,B00000100,B00001000,B00000010};//Table containing the fireorder (1-3-4-2 sequential)
 
@@ -74,7 +79,7 @@ void ISR1() { //Keep constant track of CHANGE/(RISING after sync) state for refe
     }
   }
 
-  else //Perform the code below only before sync has been achieved. This saves CPU resources at high engine RPMs.
+else //Perform the code below only before sync has been achieved. This saves CPU resources at high engine RPMs.
   {
     state = !state; //Flip the state bit to indicate rising/falling sitation on reference pin
     if (state == 1) //RISING SIGNAL on referene pin
@@ -89,8 +94,25 @@ void ISR1() { //Keep constant track of CHANGE/(RISING after sync) state for refe
       {
          detachInterrupt(digitalPinToInterrupt(CamshaftPositionPin)); //If sync is achieved, we immedeatly disable keeping track of the position pin permanently
          syncAchieved = 1; //Set variable used to start ignition and disable unnecessary measuring of position pin
+
+           //Ignition sampling settings, start capturing ignition events
+            PCICR |= 0b00000010;     //Turn on port C pin change interrupts, used for Ignition sampling
+            PCMSK1 |= 0b00100000;    //Turn on pin PC5, which is PCINT11, physical pin 28
+
          attachInterrupt(digitalPinToInterrupt(CamshaftReferencePin), ISR1, RISING); //We no longer keep track of change state once synced. Now we locate rising change on the ref pin.
       } 
       pos = 0; //Reset after each count. This is an important reset before large window has been found (moved up)
   }   
+}
+
+ISR(PCINT1_vect){ // Port C, PCINT8 - PCINT14, Interrupt for Ignition High on A5 (pin 28)
+  if(digitalRead(IgnitionPin) == HIGH) //Filtering, determine if pin is high. 
+  {
+    detachInterrupt(digitalPinToInterrupt(CamshaftReferencePin)); //If pin is high, disable sequencing
+  }
+else 
+  {  
+   attachInterrupt(digitalPinToInterrupt(CamshaftReferencePin), ISR1, RISING); //Otherwise enable sequencing. This can even be called unnecessarily without issues.
+  }
+  
 }
