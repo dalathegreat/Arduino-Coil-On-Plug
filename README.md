@@ -37,10 +37,14 @@ Arduino prerequisites:
 If you want to convert another type of Nissan engine you first need to modify the number of pulses used for sync. Here is a great read which explains some of the different trigger discs found in various Nissans: http://datsun1200.com/modules/mediawiki/index.php?title=Nissan_Optical_CAS This application can easily be modified to work with the following Nissan engines:
 
 1. SR needs 6 pulses https://www.youtube.com/watch?v=OISRDuSyMRY 
-  -SR20DE Distributor: 6 pulses
-  -SR20DE Distributor(w coil): x pulses
-  -SR20VE Distributor: x pulses
-  -SR20 CAS: x pulses
+
+      -SR20DE Distributor: 6 pulses
+  
+      -SR20DE Distributor(w coil): x pulses
+  
+      -SR20VE Distributor: x pulses
+  
+      -SR20 CAS: x pulses
 2. KA needs ? pulses
 3. CA needs ? pulses
 4. CG needs ? pulses
